@@ -45,6 +45,41 @@ def read_gildas_fits(source, path):
     return gildas_fit_data
 
 
+def antenna_mb_temperature(frequency):
+    """
+    Calculate the antenna temperature for a given frequency.
+    
+    Parameters
+    ----------
+    frequency : float
+        Frequency in MHz.
+
+    Returns
+    -------
+    Antenna to main beam temperature conversion factor in K.
+    """
+
+    if (frequency > 70000).any():
+        TatoTmb = (
+            1000 * (94 * (frequency / 1000 / 211.024589551445843 + 1) +
+                    (-94 - 0.102592852137351087 * (frequency / 1000 - 211.024589551445843)) *
+                    frequency / 1000 / 211.024589551445843)
+                    )
+        TatoTmb = TatoTmb / (
+            -2.556567478886569763E-04 * (frequency / 1000) ** 2 -
+            7.226368939203042796E-02 * (frequency / 1000) +
+            89.2508073876328893
+            )
+    elif (30000 <= frequency <= 50000).any():
+        TatoTmb = 1.4913789244107469 - 1.2925792303656232E-002 * (frequency/1000)
+        TatoTmb = TatoTmb + 5.0941757966556876E-004 * (frequency/1000)**2
+        TatoTmb = TatoTmb * 1000
+    else:
+        raise ValueError("Invalid frequency range. Supported ranges: 30-50 GHz, 70-116 GHz")
+    
+    return TatoTmb
+
+
 def apply_temperature_correction(telescope_data, source, element):
     """
     Applies temperature correction to the telescope data based on frequency ranges.
@@ -71,7 +106,22 @@ def apply_temperature_correction(telescope_data, source, element):
     corrected_data = {}
 
     try:
-        # Determine telescope type based on frequency ranges
+        # Convert Tpeak data from Tmb to Ta and store it in a new column
+        # called 'Tpeak[K]'
+        #corrected_data[source] = telescope_data[source].copy()
+        telescope_data[source]['Tpeak'] = telescope_data[source]['Tpeak'] / antenna_mb_temperature(telescope_data[source]['Freq[MHz]'])
+        #corrected_data[source]['Tpeak[K]'] = telescope_data[source]['Tpeak'] / antenna_mb_temperature(telescope_data[source]['Freq[MHz]'])
+        print(f'Temperature correction applied to {source} data')
+        # Classify the lines by species
+        for i, elem in enumerate(element):
+            corrected_data[f'{source}_{elem}'] = telescope_data[source][
+                telescope_data[source]['Species'].str.contains(rf'{elem}(?!I)')].reset_index(drop=True)
+            
+        print(f'{source} data classified by species')
+    except ZeroDivisionError:
+        print(f'Error in {source} data: dividing by zero')
+
+    '''    # Determine telescope type based on frequency ranges
         if telescope_data[source]['Freq[MHz]'].max() > 70000:
             telescope_type = 'IRAM-30m'
         elif 30000 <= telescope_data['Freq[MHz]'].max() <= 50000:
@@ -118,15 +168,7 @@ def apply_temperature_correction(telescope_data, source, element):
 
         else:
             raise ValueError("Invalid telescope type. Supported types: 'IRAM-30m', 'Yebes-40m")
-
-        # Classify the lines by species
-        for i, elem in enumerate(element):
-            corrected_data[f'{source}_{elem}'] = telescope_data[source][
-                telescope_data[source]['Species'].str.contains(rf'{elem}(?!I)')].reset_index(drop=True)
-            
-        print(f'{source} data classified by species')
-
-    except ZeroDivisionError:
-        print(f'Error in {source} data: dividing by zero')
-
+'''
+        
+    
     return corrected_data
