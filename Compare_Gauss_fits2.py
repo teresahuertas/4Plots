@@ -25,7 +25,7 @@ def read_gildas_fits(source, path):
     >>> gildas_fit_data = read_gildas_fits(source, path)
     """
     # Read the GILDAS-CLASS fits data files
-    fit_files = {f'{source}_fit': f'{source}_rrls_fit.csv'}
+    fit_files = {f'{source}': f'{source}_rrls_fit.csv'}
     gildas_fit_data = {}
 
     for file_name in fit_files:
@@ -37,10 +37,10 @@ def read_gildas_fits(source, path):
             print(f"File '{fit_files[file_name]}' not found in path '{path}'")
 
     if f'{source}_fit' in gildas_fit_data:
-        gildas_fit_data[f'{source}_fit']['Delta_n'] = (
-            gildas_fit_data[f'{source}_fit']['Upper'] - gildas_fit_data[f'{source}_fit']['Lower']
+        gildas_fit_data[f'{source}']['Delta_n'] = (
+            gildas_fit_data[f'{source}']['Upper'] - gildas_fit_data[f'{source}']['Lower']
         )
-        gildas_fit_data[f'{source}_fit'] = gildas_fit_data[f'{source}_fit'].reset_index(drop=True)
+        gildas_fit_data[f'{source}'] = gildas_fit_data[f'{source}'].reset_index(drop=True)
 
     return gildas_fit_data
 
@@ -72,7 +72,7 @@ def apply_temperature_correction(telescope_data, source, element):
 
     try:
         # Determine telescope type based on frequency ranges
-        if telescope_data['Freq[MHz]'].max() > 70000:
+        if telescope_data[source]['Freq[MHz]'].max() > 70000:
             telescope_type = 'IRAM-30m'
         elif 30000 <= telescope_data['Freq[MHz]'].max() <= 50000:
             telescope_type = 'Yebes-40m'
@@ -82,22 +82,23 @@ def apply_temperature_correction(telescope_data, source, element):
         if telescope_type == 'IRAM-30m':
             # Convert Tpeak data from Tmb to Ta
             TatoTmb = (
-                1000 * (94 * (telescope_data['Freq[MHz]'] / 1000 / 211.024589551445843 + 1) +
-                       (-94 - 0.102592852137351087 * (telescope_data['Freq[MHz]'] / 1000 - 211.024589551445843)) *
-                       telescope_data['Freq[MHz]'] / 1000 / 211.024589551445843)
+                1000 * (94 * (telescope_data[source]['Freq[MHz]'] / 1000 / 211.024589551445843 + 1) +
+                       (-94 - 0.102592852137351087 * (telescope_data[source]['Freq[MHz]'] / 1000 - 211.024589551445843)) *
+                       telescope_data[source]['Freq[MHz]'] / 1000 / 211.024589551445843)
             )
             TatoTmb = TatoTmb / (
-                    -2.556567478886569763E-04 * (telescope_data['Freq[MHz]'] / 1000) ** 2 -
-                    7.226368939203042796E-02 * (telescope_data['Freq[MHz]'] / 1000) +
+                    -2.556567478886569763E-04 * (telescope_data[source]['Freq[MHz]'] / 1000) ** 2 -
+                    7.226368939203042796E-02 * (telescope_data[source]['Freq[MHz]'] / 1000) +
                     89.2508073876328893
             )
-            telescope_data['Tpeak'] = telescope_data['Tpeak'] / TatoTmb
+            telescope_data[source]['Tpeak'] = telescope_data[source]['Tpeak'] / TatoTmb
             TatomJy = (
-                1000 * (5.760273113762687692E-05 * (telescope_data['Freq[MHz]'] / 1000) ** 2 -
-                       5.015712414552293830E-03 * (telescope_data['Freq[MHz]'] / 1000) +
+                1000 * (5.760273113762687692E-05 * (telescope_data[source]['Freq[MHz]'] / 1000) ** 2 -
+                       5.015712414552293830E-03 * (telescope_data[source]['Freq[MHz]'] / 1000) +
                        5.91822560841985812)
             )
-            telescope_data['Tpeak'] = telescope_data['Tpeak'] * TatomJy
+            telescope_data[source]['Tpeak'] = telescope_data[source]['Tpeak'] * TatomJy
+            print(f'Temperature correction applied to {source} IRAM-30m data')
 
         elif telescope_type == 'Yebes-40m':
             # Convert Tpeak data from Tmb to Ta
@@ -113,14 +114,17 @@ def apply_temperature_correction(telescope_data, source, element):
             )
             TatomJy = TatomJy * 1000
             telescope_data['Tpeak'] = telescope_data['Tpeak'] * TatomJy
+            print(f'Temperature correction applied to {source} Yebes-40m data')
 
         else:
             raise ValueError("Invalid telescope type. Supported types: 'IRAM-30m', 'Yebes-40m")
 
         # Classify the lines by species
         for i, elem in enumerate(element):
-            corrected_data[f'{source}_{elem}'] = telescope_data[
-                telescope_data['Species'].str.contains(rf'{elem}(?!I)')].reset_index(drop=True)
+            corrected_data[f'{source}_{elem}'] = telescope_data[source][
+                telescope_data[source]['Species'].str.contains(rf'{elem}(?!I)')].reset_index(drop=True)
+            
+        print(f'{source} data classified by species')
 
     except ZeroDivisionError:
         print(f'Error in {source} data: dividing by zero')
