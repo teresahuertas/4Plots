@@ -80,6 +80,33 @@ def antenna_mb_temperature(frequency):
     return TatoTmb
 
 
+def mb_jy_conversion(frequency):
+    """
+    Calculate the conversion factor from antenna temperature to flux density in mJy.
+
+    Parameters
+    ----------
+    frequency : float
+        Frequency in MHz.
+
+    Returns
+    -------
+    Conversion factor from antenna temperature to flux density in mJy.
+    """
+
+    if (frequency > 70000).any():
+        TatomJy = (5.760273113762687692E-05*(frequency/1000)**2-5.015712414552293830E-03*(frequency/1000)+5.91822560841985812)
+        TatomJy = TatomJy * 1000 # mJy
+    elif (30000 <= frequency <= 50000).any():
+        TatomJy = 4.0660553594502913 -6.6879469816527315E-002 * (frequency/1000)
+        TatomJy = TatomJy + 1.6408850177347977E-003 * (frequency/1000)**2
+        TatomJy = TatomJy * 1000
+    else:
+        raise ValueError("Invalid frequency range. Supported ranges: 30-50 GHz, 70-116 GHz")
+    
+    return TatomJy
+
+
 def apply_temperature_correction(telescope_data, source, element):
     """
     Applies temperature correction to the telescope data based on frequency ranges.
@@ -106,11 +133,8 @@ def apply_temperature_correction(telescope_data, source, element):
     corrected_data = {}
 
     try:
-        # Convert Tpeak data from Tmb to Ta and store it in a new column
-        # called 'Tpeak[K]'
-        #corrected_data[source] = telescope_data[source].copy()
         telescope_data[source]['Tpeak'] = telescope_data[source]['Tpeak'] / antenna_mb_temperature(telescope_data[source]['Freq[MHz]'])
-        #corrected_data[source]['Tpeak[K]'] = telescope_data[source]['Tpeak'] / antenna_mb_temperature(telescope_data[source]['Freq[MHz]'])
+        telescope_data[source]['Tpeak'] = telescope_data[source]['Tpeak'] * mb_jy_conversion(telescope_data[source]['Freq[MHz]'])
         print(f'Temperature correction applied to {source} data')
         # Classify the lines by species
         for i, elem in enumerate(element):
